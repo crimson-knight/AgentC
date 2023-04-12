@@ -1,0 +1,17 @@
+name: amber-agent-gpt
+version: 0.1.0
+
+authors:
+  - crimson-knight <crimsonknightstudios@gmail.com>
+
+targets:
+  amber-agent-gpt:
+    main: src/amber-agent-gpt.cr
+
+crystal: 1.7.3
+
+license: MIT
+
+dependencies:
+  openai:
+    github: sferik/openai-crystal
