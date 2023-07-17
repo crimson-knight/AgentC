@@ -1,6 +1,6 @@
 version: 2.0
 shards:
   openai:
-    git: https://github.com/sferik/openai-crystal.git
-    version: 0.2.0+git.commit.d5c7849a36e29235008bfa4ae0e6205be5ad68b9
+    git: https://github.com/lancecarlson/openai.cr.git
+    version: 0.1.0+git.commit.852bcd9b37d8472a4c72a2498ebb90351048fa68
 

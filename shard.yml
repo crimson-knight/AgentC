@@ -1,17 +1,17 @@
-name: amber-agent-gpt
+name: agentc
 version: 0.1.0
 
 authors:
-  - crimson-knight <crimsonknightstudios@gmail.com>
+  - crimson-knight <me@seesethcode.com>
 
 targets:
-  amber-agent-gpt:
-    main: src/amber-agent-gpt.cr
+  agentc:
+    main: src/agentc.cr
 
-crystal: 1.7.3
+crystal: 1.8.2
 
 license: MIT
 
 dependencies:
   openai:
-    github: sferik/openai-crystal
+    github: lancecarlson/openai.cr

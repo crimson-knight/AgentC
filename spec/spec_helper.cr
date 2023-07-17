@@ -1,2 +1,2 @@
 require "spec"
-require "../src/amber-agent-gpt"
+require "../src/agentc"

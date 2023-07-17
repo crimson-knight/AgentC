@@ -1,6 +1,6 @@
 require "./spec_helper"
 
-describe Amber::Agent::Gpt do
+describe AgentC do
   # TODO: Write tests
 
   it "works" do

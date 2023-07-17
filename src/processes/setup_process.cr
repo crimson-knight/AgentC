@@ -1,1 +1,0 @@
-# Eventually move the setup steps from the main amber_agent_gpt.cr file into here

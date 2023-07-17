@@ -30,17 +30,18 @@ class AgentConfig
   property memory_index : String
   property memory_backend : String
   property is_default_settings : Bool = false
-  property goals : Array(String) = [] of String
+  property goals : Array(Goal) = [] of Goal
+  property custom_local_storage_path : String = ""
 
   # Initializes the config object using some logic to determine if the config json is present
   # or if the defaults will need to be used. Run the agent the first time to have the config generated.
-  def self.new_from_config_file
-    if Dir.exists?(Path["~/.amber_agent_gpt"].expand(home: true))
-      config_data = File.read(Path["~/.amber_agent_gpt/config.json"].expand(home: true))
+  def self.create_new_config_file_or_load_existing_config
+    if Dir.exists?(Path["~/.agentc"].expand(home: true))
+      config_data = File.read(Path["~/.agentc/config.json"].expand(home: true))
     else
       config_data = %(
         {
-          "agent_name": "amber_agent", 
+          "agent_name": "agentc", 
           "agent_id": "#{UUID.random}",
           "agent_personality": "an ai agent that is focused on growing and managing multiple digital businesses autonomously",
           "continuous_mode": false,
@@ -59,7 +60,7 @@ class AgentConfig
           "redis_port": "#{ENV["REDIS_PORT"]? || "6379"}",
           "redis_password": "#{ENV["REDIS_PASSWORD"]? || ""}",
           "wipe_redis_on_start": #{!!ENV["WIPE_REDIS_ON_START"]? || false},
-          "memory_index": "#{ENV["MEMORY_INDEX"]? || "amber-agent-gpt"}",
+          "memory_index": "#{ENV["MEMORY_INDEX"]? || "agentc"}",
           "memory_backend": "#{ENV["MEMORY_BACKEND"]? || "local"}",
           "is_default_settings": true
         })
