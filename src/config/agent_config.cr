@@ -46,7 +46,7 @@ class AgentConfig
           "agent_personality": "an ai agent that is focused on growing and managing multiple digital businesses autonomously",
           "continuous_mode": false,
           "speak_mode": false,
-          "fast_llm_model": "gpt-3.5-turbo",
+          "fast_llm_model": "llama2",
           "smart_llm_model": "gpt-4",
           "fast_token_limit": 4096,
           "smart_token_limit": 8000,

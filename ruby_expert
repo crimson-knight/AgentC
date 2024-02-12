@@ -1,0 +1,5 @@
+FROM codellama:7b
+
+SYSTEM """
+ follow the directions you are provided, ensuring that your responses are entirely valid json
+"""

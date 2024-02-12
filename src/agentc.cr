@@ -1,3 +1,4 @@
+require "./ai_clients/ollama_client"
 require "./config/agent_config"
 require "./data_store/local_storage"
 require "./concepts/goals/goal"
@@ -114,6 +115,6 @@ module AgentC
   
   puts "Alright! Let's get started!"
   # Start the goals process
-  goals_process = PrimaryProcess.new(agent_configuration, local_storage)
+  goals_process = PrimaryProcess.new(agent_configuration: agent_configuration, local_storage: local_storage)
   goals_process.run
 end

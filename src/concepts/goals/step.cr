@@ -11,7 +11,6 @@ require "json"
 #   "preceding_steps": [3]
 # }
 # ```
-#
 class Step
   include JSON::Serializable
 

@@ -18,7 +18,8 @@ class PrimaryProcess
   property capabilities : Array(PrimaryCapability) = Array(PrimaryCapability).new
 
   def initialize(@agent_configuration, @local_storage)
-    @openai_client = OpenAI::Client.new(access_token: @agent_configuration.openai_api_key)
+    # @openai_client = OpenAI::Client.new(access_token: @agent_configuration.openai_api_key)
+    @openai_client = OllamaClient.new
 
     # Registering all of the capabilities available to the agent
     @capabilities << RawPostWebhookCapability.new
@@ -39,8 +40,8 @@ class PrimaryProcess
 
     # The on-going process of executing the agents plan
     @local_storage.goals.each do |goal|
-      if goal.status == "not_started"
-        puts "Creating a plan for goal: #{goal.initial_goal}"
+      if goal.status == "not_started" && goal.asynchronous_steps.empty? && goal.synchronous_steps.empty?
+        puts "Creating a plan for goal: #{goal.refined_goal}"
 
         plan_creation_prompt = <<-STRING
           You are an expert AI at planning for goals. You must create a plan for a goal using the knowledge of your agent capabilities.
@@ -51,7 +52,11 @@ class PrimaryProcess
           Here are the capabilities you have available to you:
           #{@capabilities.each { |capability| capability.generate_capability_description_for_goal_planning}}
 
-          Your must respond with your plan for this goal using the following JSON format, using 100% valid JSON:
+          Each step needs to be related to completing the objective and be delegated to another agent to manage until completed.
+          Focus on steps that can be performed directly on the host computer, which is MacOs.
+
+
+          You must respond with your plan for this goal using the following JSON format, using 100% valid JSON:
 
           ```json
           {
@@ -91,15 +96,16 @@ class PrimaryProcess
           Asynchronous_steps must be completed in order and cannot be performed in parallel. Asynchronous steps can be performed in parallel with synchronous steps.
         STRING
         
-        ai_response = @openai_client.chat("gpt-3.5-turbo", [{role: "user", content: goal_refinement_prompt}])
-        puts ai_response.choices.first[:message][:content]
+        ai_response = @openai_client.chat(messages: [{role: "user", content: plan_creation_prompt}])
+        puts "We made a plan! "
+        puts ai_response["message"]["content"]
 
+        # Need to parse these steps into the goal object
 
-        #goal.start_date = Date.today
-        #goal.last_evaluation = Date.today
-        #@local_storage.update_local_storage_file
+        goal.start_date = Time.utc.to_s
+        goal.last_evaluated = Time.utc.to_s
+        @local_storage.update_local_storage_file
       end
-      
     end
 
   end
@@ -113,13 +119,14 @@ class PrimaryProcess
           goal_refinement_prompt = <<-STRING
           You are an expert AI at goal setting. You must refine a goal to be SMART (Specific, Measurable, Achievable, Relevant, Time-bound).
 
+          The current date is: #{Time.utc}
           Here is the goal you need to work with:
 
           #{goal.initial_goal}
 
           Please consider this goal and how you can make it into a SMART goal, knowing that you are an AI who will have an agent making this goal happen.
 
-          Here is the format your response must be in. Update the necessary fields based on how you refine your goal. Your response must be entirely in valid JSON.
+          Here is the format your response must be in. Update the necessary fields based on how you refine your goal. Your response must be entirely valid JSON.
           {
             "specific": false,
             "initial_goal": "#{goal.initial_goal}",
@@ -144,12 +151,39 @@ class PrimaryProcess
           "status" should always be "not_started" for new goals. "repeat_attributes" should be an array of attributes that should be repeated.
           "evaluation_frequency" can be: "daily", "weekly", "semi-weekly", "monthly", "semi-monthly", "quarterly", "yearly
           ignore the "adjustments", "synchronous_steps" and "asynchronous_steps" fields for now.
+          Your entire response must be valid JSON so that it can be directly parsed by the agent.
           STRING
           
-          ai_response = @openai_client.chat("gpt-3.5-turbo", [{role: "user", content: goal_refinement_prompt}])
+          max_retries = 5
+          retries = 0
+          messages =  [{role: "user", content: goal_refinement_prompt}]
+          ai_response = @openai_client.chat(messages: messages)
 
-          puts ai_response.choices.first[:message][:content]
-          goal = Goal.from_json(ai_response.choices.first[:message][:content])
+          while retries < max_retries
+            begin
+              
+              extracted_json = @openai_client.chat(messages: [{role: "user", content: "extract and return the JSON from the follow prompt response: \n#{ai_response["message"]["content"]}"}], model: "codellama:7b")
+              puts "llama2 said: \n"
+              pp ai_response["message"]["content"]
+              puts "\n\n extracted json response:\n"
+              pp extracted_json["message"]["content"]
+              goal = Goal.from_json(extracted_json["message"]["content"].as_s)
+              puts "The goal has been updated"
+              retries = max_retries # end the loop
+            rescue
+              puts "Received an invalid JSON response from the AI."
+              retries += 1
+              if retries < max_retries
+                # turn this into a log instead of terminal output
+                puts "Retrying... Attempt #{retries + 1} of #{max_retries}"
+                # Optionally, send feedback to AI for correction before retrying
+                messages << {role: "assistant", content: ai_response.not_nil!["message"]["content"].as_s}
+                messages << {role: "user", content: "Please correct your response to be perfectly valid JSON only"}
+              else
+                puts "Failed to get a valid JSON response after #{max_retries} attempts."
+              end
+            end
+          end
         end
 
         puts "All goals are refined into SMART goals."
