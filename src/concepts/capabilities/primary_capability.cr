@@ -28,4 +28,5 @@ abstract class PrimaryCapability
   def perform
     raise "You need to define the #perform instance method on your child class."
   end
+
 end

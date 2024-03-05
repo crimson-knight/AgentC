@@ -1,0 +1,37 @@
+Here are the capabilities you have available to you:
+#{@capabilities.each { |capability| capability.generate_capability_description_for_goal_planning}}
+
+You must respond with your plan for this goal using the following JSON format, using 100% valid JSON:
+
+```json
+{
+  "asynchronous_steps": [
+    {
+      "id": 1,
+      "name": "Research and enroll in a suitable online Python course",
+      "status": "not_started",
+      "preceding_steps": []
+    },
+    {
+      "id": 2,
+      "name": "Dedicate 5 hours per week to learning Python",
+      "status": "not_started",
+      "preceding_steps": [1]
+    }
+  ],
+  "synchronous_steps": [
+    {
+      "id": 3,
+      "name": "Apply the learned concepts by building a small blog project",
+      "status": "not_started",
+      "preceding_steps": [1, 2]
+    },
+    {
+      "id": 4,
+      "name": "Review and improve the blog project based on feedback",
+      "status": "not_started",
+      "preceding_steps": [3]
+    }
+  ]
+}
+```

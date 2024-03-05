@@ -7,7 +7,7 @@ class OllamaClient
   property temperature : Float64
   property max_tokens : Int32
 
-  def initialize(@model = "llama2", @temperature = 0.7, @max_tokens = 4096)
+  def initialize(@model = "llama2:13b", @temperature = 0.7, @max_tokens = 4096)
   end
 
   # This generates a chat completion. This name was kept in order to maintain compatibility with the OpenAI client

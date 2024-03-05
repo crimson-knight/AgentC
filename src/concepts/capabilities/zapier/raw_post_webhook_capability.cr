@@ -2,7 +2,6 @@ require "../primary_capability"
 
 # 
 # This class defines the default behavior for the Zapier webhooks that the agent can publish TO.
-# 
 #
 class RawPostWebhookCapability < PrimaryCapability
   property capability_name : String = "Zapier webhooks"

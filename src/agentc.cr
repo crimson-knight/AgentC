@@ -1,4 +1,4 @@
-require "./ai_clients/ollama_client"
+require "./ai_clients/*"
 require "./config/agent_config"
 require "./data_store/local_storage"
 require "./concepts/goals/goal"

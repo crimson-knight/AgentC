@@ -10,6 +10,8 @@ require "../concepts/capabilities/zapier/**"
 
 # This is where the real "agent" stuff begins. This is where you'll want to customize the flow of how your agent works inside of it's own infite loop.
 # It is responsible for starting and managing the goals process
+#
+# This process is intended to act as a the "router" using tinyllama to determine what kind of queries are coming in and then route them to the correct agent
 class PrimaryProcess
   include JSON::Serializable
 
@@ -19,7 +21,8 @@ class PrimaryProcess
 
   def initialize(@agent_configuration, @local_storage)
     # @openai_client = OpenAI::Client.new(access_token: @agent_configuration.openai_api_key)
-    @openai_client = OllamaClient.new
+    #@openai_client = OllamaClient.new
+    @openai_client = LlamaCpp.new
 
     # Registering all of the capabilities available to the agent
     @capabilities << RawPostWebhookCapability.new
@@ -44,63 +47,28 @@ class PrimaryProcess
         puts "Creating a plan for goal: #{goal.refined_goal}"
 
         plan_creation_prompt = <<-STRING
-          You are an expert AI at planning for goals. You must create a plan for a goal using the knowledge of your agent capabilities.
+          You are an expert AI at planning for goals. You specialize in writing software, specifically with Ruby on Rails. You must create a plan for a goal using the knowledge of your agent capabilities.
 
           Here is the goal you need to work with:
           #{goal.refined_goal}
 
-          Here are the capabilities you have available to you:
-          #{@capabilities.each { |capability| capability.generate_capability_description_for_goal_planning}}
-
           Each step needs to be related to completing the objective and be delegated to another agent to manage until completed.
           Focus on steps that can be performed directly on the host computer, which is MacOs.
 
+          Create the first 10 steps that need to take place to accomplish the goal. 
 
-          You must respond with your plan for this goal using the following JSON format, using 100% valid JSON:
-
-          ```json
-          {
-            "asynchronous_steps": [
-              {
-                "id": 1,
-                "name": "Research and enroll in a suitable online Python course",
-                "status": "not_started",
-                "preceding_steps": []
-              },
-              {
-                "id": 2,
-                "name": "Dedicate 5 hours per week to learning Python",
-                "status": "not_started",
-                "preceding_steps": [1]
-              }
-            ],
-            "synchronous_steps": [
-              {
-                "id": 3,
-                "name": "Apply the learned concepts by building a small blog project",
-                "status": "not_started",
-                "preceding_steps": [1, 2]
-              },
-              {
-                "id": 4,
-                "name": "Review and improve the blog project based on feedback",
-                "status": "not_started",
-                "preceding_steps": [3]
-              }
-            ]
-          }
-          ```
+          Label steps as synchronous or asynchronous.
 
           Definitions: 
           synchronous_steps can be performed in parallel and do not depend on any other synchronous step being completed first. Synchronous steps can depend on asynchronous_steps being completed first.
-          Asynchronous_steps must be completed in order and cannot be performed in parallel. Asynchronous steps can be performed in parallel with synchronous steps.
+          Asynchronous_steps must be completed in order. Asynchronous steps can be performed in parallel with synchronous steps.
         STRING
-        
-        ai_response = @openai_client.chat(messages: [{role: "user", content: plan_creation_prompt}])
+
+        ai_conversation = [{role: "user", content: plan_creation_prompt}]
+
+        ai_response = @openai_client.chat(messages: ai_conversation, grammar_file: "goal_planning.gbnf", repeat_penalty: 1.2, top_k_sampling: 64)
         puts "We made a plan! "
         puts ai_response["message"]["content"]
-
-        # Need to parse these steps into the goal object
 
         goal.start_date = Time.utc.to_s
         goal.last_evaluated = Time.utc.to_s
