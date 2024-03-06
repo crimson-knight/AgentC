@@ -36,11 +36,12 @@ class LlamaCpp
   property in_suffix : String = "<Assistant: " # --in-suffix
 
   # This is just a good idea, it helps keep the original prompt in the context window. This should keep the model more focused on the original topic.
-  property keep : String = "--keep"
+  property keep : String = "" # --keep or --keep N where `N` is the number of tokens to refresh into the context window
 
   # Setting this changes how many tokens are trying to be predicted at a time. Setting this to -1 will generate tokens infinitely, but causes the context window to reset frequently.
   # Setting this to -2 stops generating as soon as the context window fills up
-  property n_predict : Int32 = 256
+  property n_predict : Int32 = 1000
+  # Note, this is probably going to need to be adapted to be more dynamic based on some kind of tokenization lib. Probably will need to bind to it with C functions
 
 
   def chat(messages : Array(NamedTuple(role: String, content: String)), model : String = model_name, temperature : Float32 = @temperature, max_tokens : Int32 = @context_size, grammar_file = "", repeat_penalty = @repeat_pentalty, top_k_sampling = @top_k_sampling, n_predict = @n_predict)
@@ -60,6 +61,8 @@ class LlamaCpp
 
     # Change this into a prompting format that more clearly uses the User/Assistant format. Need to look it up in the docs though!
     messages.each { |message| prompt_text += message["role"] + ": " + message["content"] + "\n" }
+
+    prompt_text += "[/INST]\n\r\rAssistant: "
 
     response_json = Hash(String, Hash(String, String)).new
     content = Hash(String,String).new
@@ -106,9 +109,7 @@ class LlamaCpp
       # When the process outputs something, capture it and send it to the content hash
       when content_io = process_output_channel.receive
         puts "The process has output something and been recieved back into the main fiber"
-        content["content"] = content_io.gets_to_end
-        
-        
+        content["content"] = content_io.gets_to_end.split("\n\r\rAssistant: ").last
       when timeout(2.minute)
         puts "timed out, checking the process status..."
         
@@ -140,7 +141,7 @@ class LlamaCpp
     successfully_completed_chat_completion_channel.close
     
     response_json["message"] = content
-    return JSON.parse(response_json.to_json)
+    return IO::Memory.new(content["content"])
   end
 end
 

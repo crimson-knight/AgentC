@@ -47,8 +47,6 @@ class PrimaryProcess
         puts "Creating a plan for goal: #{goal.refined_goal}"
 
         plan_creation_prompt = <<-STRING
-          You are an expert AI at planning for goals. You specialize in writing software, specifically with Ruby on Rails. You must create a plan for a goal using the knowledge of your agent capabilities.
-
           Here is the goal you need to work with:
           #{goal.refined_goal}
 
@@ -64,14 +62,29 @@ class PrimaryProcess
           Asynchronous_steps must be completed in order. Asynchronous steps can be performed in parallel with synchronous steps.
         STRING
 
-        ai_conversation = [{role: "user", content: plan_creation_prompt}]
+        ai_conversation = [{role: "[INST]<<SYS>>", content: "You are an expert at planning. You are a Senior Ruby on Rails Architect. You must create a plan for the provided goal.<<SYS>>"}]
+        ai_conversation << {role: "user", content: plan_creation_prompt}
 
-        ai_response = @openai_client.chat(messages: ai_conversation, grammar_file: "goal_planning.gbnf", repeat_penalty: 1.2, top_k_sampling: 64)
-        puts "We made a plan! "
-        puts ai_response["message"]["content"]
+        a_valid_plan_provided_was_not_provided = true
 
-        goal.asynchronous_steps = ai_response["message"]["content"]["asynchronous_steps"].as_a.map { |r| Step.from_json(r.as_s) }
-        goal.synchronous_steps = ai_response["message"]["content"]["synchronous_steps"].as_a.map { |r| Step.from_json(r.as_s) }
+        while a_valid_plan_provided_was_not_provided
+          begin
+            ai_response = @openai_client.chat(messages: ai_conversation, grammar_file: "goal_planning.gbnf", repeat_penalty: 1.2, top_k_sampling: 264)
+            puts "We made a plan! "
+            puts ai_response
+
+            # This constant serializing to/from JSON really sucks...but onward and upward!
+            goal_response = GoalResponse.from_json(ai_response)
+            a_valid_plan_provided_was_not_provided = false
+
+            goal.asynchronous_steps = goal_response.asynchronous_steps
+            goal.synchronous_steps = goal_response.synchronous_steps
+          rescue e
+            Log.info { "An error occurred while trying to parse the plan from the AI." }
+            Log.info { e.message }
+            Log.info { e.backtrace }
+          end
+        end
 
         goal.start_date = Time.utc.to_s
         goal.last_evaluated = Time.utc.to_s
@@ -133,12 +146,12 @@ class PrimaryProcess
           while retries < max_retries
             begin
               
-              extracted_json = @openai_client.chat(messages: [{role: "user", content: "extract and return the JSON from the follow prompt response: \n#{ai_response["message"]["content"]}"}], model: "codellama:7b")
+              extracted_json = @openai_client.chat(messages: [{role: "user", content: "extract and return the JSON from the follow prompt response: \n#{ai_response.rewind.gets_to_end}"}], model: "codellama:7b")
               puts "llama2 said: \n"
-              pp ai_response["message"]["content"]
+              pp ai_response #["message"]["content"]
               puts "\n\n extracted json response:\n"
-              pp extracted_json["message"]["content"]
-              goal = Goal.from_json(extracted_json["message"]["content"].as_s)
+              pp extracted_json #["message"]["content"]
+              goal = Goal.from_json(extracted_json)#["message"]["content"].as_s)
               puts "The goal has been updated"
               retries = max_retries # end the loop
             rescue
@@ -148,7 +161,7 @@ class PrimaryProcess
                 # turn this into a log instead of terminal output
                 puts "Retrying... Attempt #{retries + 1} of #{max_retries}"
                 # Optionally, send feedback to AI for correction before retrying
-                messages << {role: "assistant", content: ai_response.not_nil!["message"]["content"].as_s}
+                messages << {role: "assistant", content: ai_response.rewind.gets_to_end}
                 messages << {role: "user", content: "Please correct your response to be perfectly valid JSON only"}
               else
                 puts "Failed to get a valid JSON response after #{max_retries} attempts."
@@ -244,4 +257,12 @@ class PrimaryProcess
 
     pp @openai_client.chat("gpt-3.5-turbo", [{role: "user", content: prompt_text}])
   end
+end
+
+# Helper class to parse the JSON response from the AI for the goal planning step
+struct GoalResponse
+  include JSON::Serializable
+
+  property asynchronous_steps : Array(Step)
+  property synchronous_steps : Array(Step)
 end
