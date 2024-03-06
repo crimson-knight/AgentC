@@ -70,6 +70,9 @@ class PrimaryProcess
         puts "We made a plan! "
         puts ai_response["message"]["content"]
 
+        goal.asynchronous_steps = ai_response["message"]["content"]["asynchronous_steps"].as_a.map { |r| Step.from_json(r.as_s) }
+        goal.synchronous_steps = ai_response["message"]["content"]["synchronous_steps"].as_a.map { |r| Step.from_json(r.as_s) }
+
         goal.start_date = Time.utc.to_s
         goal.last_evaluated = Time.utc.to_s
         @local_storage.update_local_storage_file
