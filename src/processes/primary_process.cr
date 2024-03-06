@@ -36,7 +36,6 @@ class PrimaryProcess
 
   # This is the primary entry-point method for how the Agents behavior starts. Particularly with the start-up flow.
   def run
-
     # Start-up steps
     verify_all_goals_are_refined_or_refine_them
     verify_all_goals_have_a_plan
@@ -109,49 +108,22 @@ class PrimaryProcess
           #{goal.initial_goal}
 
           Please consider this goal and how you can make it into a SMART goal, knowing that you are an AI who will have an agent making this goal happen.
-
-          Here is the format your response must be in. Update the necessary fields based on how you refine your goal. Your response must be entirely valid JSON.
-          {
-            "specific": false,
-            "initial_goal": "#{goal.initial_goal}",
-            "refined_goal": "<< insert your refined goal text here >>",
-            "measurable": false,
-            "achievable": false,
-            "relevant": false,
-            "time_bound": false,
-            "deadline": "2023-08-14",
-            "start_date": "2023-05-14",
-            "status": "not_started",
-            "repeatable": false,
-            "repeat_attributes": ["start_date"],
-            "evaluation_frequency": "weekly",
-            "last_evaluation": null,
-            "adjustments": [],
-            "asynchronous_steps": [],
-            "synchronous_steps": []
-          }
-
-          Make sure to set a startdate, and evaluation frequency. The start date should always be right away, unless a start time was originally provided or if the goal is contingent on another goals completion. You can set an end-date non-repeating goals. Set "repeatable" to `true` if it should be repeated.
-          "status" should always be "not_started" for new goals. "repeat_attributes" should be an array of attributes that should be repeated.
-          "evaluation_frequency" can be: "daily", "weekly", "semi-weekly", "monthly", "semi-monthly", "quarterly", "yearly
-          ignore the "adjustments", "synchronous_steps" and "asynchronous_steps" fields for now.
-          Your entire response must be valid JSON so that it can be directly parsed by the agent.
           STRING
           
           max_retries = 5
           retries = 0
-          messages =  [{role: "user", content: goal_refinement_prompt}]
-          ai_response = @openai_client.chat(messages: messages)
+
+          ## TODO: finishing migrating this prompt to follow the same pattern as the goal steps prompting
+          messages =  [{role: "[INST]<<SYS>>", content: "<</SYS>>"}, {role: "user", content: goal_refinement_prompt}]
+          
+          Log.info { "Beginning to refine the goal: #{goal.initial_goal}" }
 
           while retries < max_retries
             begin
-              
-              extracted_json = @openai_client.chat(messages: [{role: "user", content: "extract and return the JSON from the follow prompt response: \n#{ai_response.rewind.gets_to_end}"}], model: "codellama:7b")
+              ai_response = @openai_client.chat(messages: messages, grammar_file: "goal_refining.gbnf", top_k_sampling: 300)
               puts "llama2 said: \n"
-              pp ai_response #["message"]["content"]
-              puts "\n\n extracted json response:\n"
-              pp extracted_json #["message"]["content"]
-              goal = Goal.from_json(extracted_json)#["message"]["content"].as_s)
+              pp ai_response
+              goal = Goal.from_json(ai_response)
               puts "The goal has been updated"
               retries = max_retries # end the loop
             rescue
@@ -160,9 +132,6 @@ class PrimaryProcess
               if retries < max_retries
                 # turn this into a log instead of terminal output
                 puts "Retrying... Attempt #{retries + 1} of #{max_retries}"
-                # Optionally, send feedback to AI for correction before retrying
-                messages << {role: "assistant", content: ai_response.rewind.gets_to_end}
-                messages << {role: "user", content: "Please correct your response to be perfectly valid JSON only"}
               else
                 puts "Failed to get a valid JSON response after #{max_retries} attempts."
               end

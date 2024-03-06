@@ -1,0 +1,9 @@
+root ::= PrimaryProcess
+PrimaryProcess ::= "{"   ws   "\"specific\":"   ws   boolean   ","   ws   "\"initial_goal\":"   ws   string   ","   ws   "\"refined_goal\":"   ws   string   ","   ws   "\"measurable\":"   ws   boolean   ","   ws   "\"achievable\":"   ws   boolean   ","   ws   "\"relevant\":"   ws   boolean   ","   ws   "\"time_bound\":"   ws   boolean   ","   ws   "\"deadline\":"   ws   string   ","   ws   "\"start_date\":"   ws   string   ","   ws   "\"status\":"   ws   string   ","   ws   "\"repeatable\":"   ws   boolean   ","   ws   "\"repeat_attributes\":"   ws   stringlist   ","   ws   "\"evaluation_frequency\":"   ws   string   ","   ws   "\"last_evaluation\":"   ws   string   ","   ws   "\"adjustments\":"   ws   "[]"    ws   ","   ws   "\"asynchronous_steps\":"   ws   "[]"   ws  ","   ws   "\"synchronous_steps\":"   ws   "[]"   ws   "}"
+PrimaryProcesslist ::= "[]" | "["   ws   PrimaryProcess   (","   ws   PrimaryProcess)*   "]"
+string ::= "\""   ([^"]*)   "\""
+boolean ::= "true" | "false"
+ws ::= [ \t\n]*
+number ::= [0-9]+   "."?   [0-9]*
+stringlist ::= "["   ws   "]" | "["   ws   string   (","   ws   string)*   ws   "]"
+numberlist ::= "["   ws   "]" | "["   ws   string   (","   ws   number)*   ws   "]"
