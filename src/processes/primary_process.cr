@@ -55,10 +55,6 @@ class PrimaryProcess
           Create the first 10 steps that need to take place to accomplish the goal. 
 
           Label steps as synchronous or asynchronous.
-
-          Definitions: 
-          synchronous_steps can be performed in parallel and do not depend on any other synchronous step being completed first. Synchronous steps can depend on asynchronous_steps being completed first.
-          Asynchronous_steps must be completed in order. Asynchronous steps can be performed in parallel with synchronous steps.
         STRING
 
         ai_conversation = [{role: "[INST]<<SYS>>", content: "You are an expert at planning. You are a Senior Ruby on Rails Architect. You must create a plan for the provided goal.<<SYS>>"}]
@@ -120,27 +116,26 @@ class PrimaryProcess
 
           while retries < max_retries
             begin
-              ai_response = @openai_client.chat(messages: messages, grammar_file: "goal_refining.gbnf", top_k_sampling: 300)
+              ai_response = @openai_client.chat(messages: messages, grammar_file: "goal_refining.gbnf", repeat_penalty: 1.3, top_k_sampling: 300)
               puts "llama2 said: \n"
-              pp ai_response
-              goal = Goal.from_json(ai_response)
+              pp ai_response.gets_to_end
+              goal = Goal.from_json(ai_response.rewind)
               puts "The goal has been updated"
               retries = max_retries # end the loop
             rescue
-              puts "Received an invalid JSON response from the AI."
               retries += 1
               if retries < max_retries
-                # turn this into a log instead of terminal output
-                puts "Retrying... Attempt #{retries + 1} of #{max_retries}"
+                Log.info { "Retrying... Attempt #{retries + 1} of #{max_retries}" }
               else
-                puts "Failed to get a valid JSON response after #{max_retries} attempts."
+                Log.error { "Failed to get a valid JSON response after #{max_retries} attempts." }
               end
             end
           end
         end
 
-        puts "All goals are refined into SMART goals."
-        puts "Updating local storage..."
+        Log.info { "All goals are refined into SMART goals." }
+        Log.info { "Updating local storage..." }
+
         @local_storage.goals = @local_storage.goals.map do |original_goal|
           if original_goal.initial_goal == goal.initial_goal
             original_goal = goal
@@ -148,6 +143,7 @@ class PrimaryProcess
 
           original_goal
         end
+
         @local_storage.update_local_storage_file
       end
     end
@@ -156,77 +152,9 @@ class PrimaryProcess
 
   def verify_all_goals_have_a_plan
   end
-
-  ## Kept this for easy reference only. Do not use.
-  def old_run_do_not_use
-    prompt_text = <<-STRING
-      Here are your goals:
-      #{@agent_configuration.goals.join("\n")}
-    
-      Your decisions must always be made independently without seeking user assistance. Play to your strengths as an LLM and pursue simple strategies with no legal complications.
-      
-      CONSTRAINTS:
-      1. ~4000 word limit for short term memory. Your short term memory is short, so immediately save important information to files.
-      2. If you are unsure how you previously did something or want to recall past events, thinking about similar events will help you remember.
-      3. No user assistance
-      4. Exclusively use the commands listed in double quotes e.g. "command name"
-
-      COMMANDS:
-      1. Google Search: "google", args: "input": "<search>"
-      5. Browse Website: "browse_website", args: "url": "<url>", "question": "<what_you_want_to_find_on_website>"
-      6. Start GPT Agent: "start_agent",  args: "name": "<name>", "task": "<short_task_desc>", "prompt": "<prompt>"
-      7. Message GPT Agent: "message_agent", args: "key": "<key>", "message": "<message>"
-      8. List GPT Agents: "list_agents", args: ""
-      9. Delete GPT Agent: "delete_agent", args: "key": "<key>"
-      10. Write to file: "write_to_file", args: "file": "<file>", "text": "<text>"
-      11. Read file: "read_file", args: "file": "<file>"
-      12. Append to file: "append_to_file", args: "file": "<file>", "text": "<text>"
-      13. Delete file: "delete_file", args: "file": "<file>"
-      14. Search Files: "search_files", args: "directory": "<directory>"
-      15. Evaluate Code: "evaluate_code", args: "code": "<full_code_string>"
-      16. Get Improved Code: "improve_code", args: "suggestions": "<list_of_suggestions>", "code": "<full_code_string>"
-      17. Write Tests: "write_tests", args: "code": "<full_code_string>", "focus": "<list_of_focus_areas>"
-      18. Execute Python File: "execute_python_file", args: "file": "<file>"
-      19. Task Complete (Shutdown): "task_complete", args: "reason": "<reason>"
-      20. Generate Image: "generate_image", args: "prompt": "<prompt>"
-      21. Do Nothing: "do_nothing", args: ""
-
-      RESOURCES:
-      1. Internet access for searches and information gathering.
-      2. Long Term memory management.
-      3. GPT-3.5 powered Agents for delegation of simple tasks.
-      4. File output.
-
-      PERFORMANCE EVALUATION:
-      1. Continuously review and analyze your actions to ensure you are performing to the best of your abilities.
-      2. Constructively self-criticize your big-picture behavior constantly.
-      3. Reflect on past decisions and strategies to refine your approach.
-      4. Every command has a cost, so be smart and efficient. Aim to complete tasks in the least number of steps.
-
-      You should only respond in JSON format as described below
-
-      RESPONSE FORMAT:
-      {
-          "thoughts":
-          {
-              "text": "thought",
-              "reasoning": "reasoning",
-              "plan": "- short bulleted\n- list that conveys\n- long-term plan",
-              "criticism": "constructive self-criticism",
-              "speak": "thoughts summary to say to user"
-          },
-          "command": {
-              "name": "command name",
-              "args":{
-                  "arg name": "value"
-              }
-          }
-      }
-    STRING
-
-    pp @openai_client.chat("gpt-3.5-turbo", [{role: "user", content: prompt_text}])
-  end
 end
+
+  
 
 # Helper class to parse the JSON response from the AI for the goal planning step
 struct GoalResponse

@@ -94,14 +94,8 @@ module AgentC
   #     Show the goals that were found in local storage
   #     TODO: Prompt the user to add more goals or remove goals
   if local_storage.goals.empty?
-    user_input = ""
     goals = [] of Goal
-    loop do
-      puts "What are your agents goals? (Leave blank when you are finished)"
-      user_input = gets
-      goals << Goal.from_json(%({"initial_goal": "#{user_input}"})) unless user_input.nil? || user_input.empty?
-      break if user_input.try(&.empty?)
-    end
+    self.prompt_for_additional_goals(goals)
     agent_configuration.goals = goals
     local_storage.goals = goals
   else
@@ -110,6 +104,9 @@ module AgentC
       puts "Original Goal: #{goal.refined_goal}\nGoal status: #{goal.status}\nRefined Goal: #{goal.refined_goal}\nGoal start date: #{goal.start_date}"
     end
 
+    puts "Would you like to add more goals? (yes/no)"
+    user_input = gets
+    self.prompt_for_additional_goals(local_storage.goals) if user_input.try &.downcase == "yes"
   end
 
   
@@ -117,4 +114,16 @@ module AgentC
   # Start the goals process
   goals_process = PrimaryProcess.new(agent_configuration: agent_configuration, local_storage: local_storage)
   goals_process.run
+
+  def self.prompt_for_additional_goals(existing_goals_array : Array(Goal))
+    user_input = ""
+    loop do
+      puts "What are your agents goals? (Leave blank when you are finished)"
+      user_input = gets
+      existing_goals_array << Goal.from_json(%({"initial_goal": "#{user_input}"})) unless user_input.nil? || user_input.empty?
+      break if user_input.try(&.empty?)
+    end
+    return existing_goals_array
+  end
+  
 end
