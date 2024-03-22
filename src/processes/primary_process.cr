@@ -148,6 +148,8 @@ class PrimaryProcess
           Create the first 10 steps that need to take place to accomplish the goal. 
 
           Label steps as synchronous or asynchronous.
+
+          You must create a plan for the provided goal by creating a list of steps.
         STRING
 
         ai_conversation = [{role: "[INST]<<SYS>>", content: "You are an expert at planning. You are a Senior Ruby on Rails Architect. You must create a plan for the provided goal.<<SYS>>"}]
@@ -157,16 +159,18 @@ class PrimaryProcess
 
         while a_valid_plan_provided_was_not_provided
           begin
-            ai_response = @openai_client.chat(messages: ai_conversation, grammar_file: "goal_planning.gbnf", repeat_penalty: 1.2, top_k_sampling: 264)
+            ai_response = @openai_client.chat(messages: ai_conversation, grammar_file: "goal_planning.gbnf", repeat_penalty: 1.2, top_k_sampling: 64)
             puts "We made a plan! "
             puts ai_response
 
-            # This constant serializing to/from JSON really sucks...but onward and upward!
+            # Parse the response here, it may fail, hence the rescue here to auto retry
             goal_response = GoalResponse.from_json(ai_response)
-            a_valid_plan_provided_was_not_provided = false
 
-            goal.asynchronous_steps = goal_response.asynchronous_steps
-            goal.synchronous_steps = goal_response.synchronous_steps
+            if goal_response.asynchronous_steps.any? || goal_response.synchronous_steps.any?
+              a_valid_plan_provided_was_not_provided = false
+              goal.asynchronous_steps = goal_response.asynchronous_steps
+              goal.synchronous_steps = goal_response.synchronous_steps
+            end
           rescue e
             Log.info { "An error occurred while trying to parse the plan from the AI." }
             Log.info { e.message }
@@ -199,7 +203,6 @@ class PrimaryProcess
   end
 
   private def determine_which_agent_to_assign_to_the_step(goal_text, step_name) : String
-    # Create a prompt that includes all of the known personalities and let's the AI choose which personality to assign to the current step
     # Create a prompt that includes all of the known personalities and let's the AI choose which personality to assign to the current step
     prompt = <<-STRING
       From the following list of role names and personalities, select the most correct agent to assign to the next step.

@@ -64,7 +64,7 @@ class Goal
   property time_bound : Bool = false      # T
   property deadline : String = ""
   property start_date : String = ""
-  property status : String = "Not Started" # Valid values are: "Not started", "In progress", "Completed - Successful", "Completed - Unsuccessful", "On hold", "Cancelled
+  property status : String = "not_started" # Valid values are: "Not started", "In progress", "Completed - Successful", "Completed - Unsuccessful", "On hold", "Cancelled
   property repeatable : Bool = false
   property repeat_updates : Array(String) = [] of String
   property evaluation_frequency : String = "Daily" # Valid values are: "Daily", "Weekly", "Bi-Monthly", "Monthly", "Quarterly", "Yearly"
