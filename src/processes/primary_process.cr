@@ -189,13 +189,24 @@ class PrimaryProcess
   # TODO: turn this step into more of a prioritization step so we can balance working on things that are taking time and being punctual with performing scheduled tasks that long running work may collide with.
   def work_on_next_available_step
     @local_storage.goals.each do |goal|
+
       # Determine if any steps have been started, if not, start the first step
-      if goal.status == "not_started"
-        if goal.asynchronous_steps.any?
-          next_step = goal.asynchronous_steps.find { |step| step.status == "not_started" } || Step.from_json(%({}))
-          next_step.status = "in_progress"
-          goal.start_date = Time.utc.to_s
-          goal.last_evaluated = Time.utc.to_s
+      if goal.status == "not_started" || goal.status == "in_progress"
+
+        # We are starting with synchronous steps only
+        if goal.synchronous_steps.any?
+          next_step = goal.synchronous_steps.find { |step| step.status == "not_started" } || Step.from_json(%({ "id": -1, "name": "Start the goal", "status": "not_started", "preceding_steps": [] }))
+          
+          raise "The next step is not valid." if next_step.id == -1
+          
+          if next_step.status == "not_started"
+            next_step.status = "in_progress"
+            goal.start_date = Time.utc.to_s
+            goal.last_evaluated = Time.utc.to_s
+          end
+
+          Log.info { "Determining which agent is assigned to this agent: #{goal.assigned_agent}"}
+
           goal.assigned_agent = determine_which_agent_to_assign_to_the_step(goal.refined_goal, next_step.name)
         end
       end
@@ -215,16 +226,17 @@ class PrimaryProcess
     a_valid_plan_provided_was_not_provided = false
     while !a_valid_plan_provided_was_not_provided
       ai_response = @openai_client.chat(messages: messages, grammar_file: "agent_assignment.gbnf", repeat_penalty: 1.2, top_k_sampling: 264)
-      
+      puts ai_response.gets_to_end
       begin
-        parsed_response = JSON.parse(ai_response.gets_to_end)
+        parsed_response = JSON.parse(ai_response.rewind.gets_to_end)
         a_valid_plan_provided_was_not_provided = true
       rescue e
+        Log.error { "An error occurred while trying to parse the assigned agent from the AI. Retrying" }
       end
     end
 
     raise "The AI did not provide a valid response for the assigned agent." if parsed_response.nil?
-    return parsed_response["assigned_agent"].as_s
+    return parsed_response["agent_personality"].as_s
   end
 end
   
