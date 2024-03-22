@@ -21,6 +21,7 @@ require "./step"
 #   "evaluation_frequency": "weekly",
 #   "last_evaluation": null,
 #   "adjustments": [],
+#   "assigned_agent": "",
 #   "asynchronous_steps": [
 #     {
 #       "id": 1,
@@ -71,7 +72,7 @@ class Goal
   property last_evaluated : String = ""
   property asynchronous_steps : Array(Step) = [] of Step
   property synchronous_steps : Array(Step) = [] of Step
-  
+  property assigned_agent : String = "" # Blank name for the default agent
 
   def is_smart?
     specific && measurable && achievable && relevant && time_bound

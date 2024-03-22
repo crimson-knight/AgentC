@@ -18,7 +18,7 @@ class LlamaCpp
   property repeat_pentalty : Float32 = 1.1 # --repeat-penalty
 
   # Adjust up to get more unique responses, adjust down to get more "probable" responses. Default: 40
-  property top_k_sampling : Int32 = 40 # --top-k
+  property top_k_sampling : Int32 = 80 # --top-k
 
   # Number of threads. Should be set to the number of physical cores, not logical cores. The M1 Max has a 10 core CPU and 32 core GPU. Let's try it with 32 to start
   property threads : Int32 = 32 # --threads
@@ -31,9 +31,6 @@ class LlamaCpp
 
   # Adjust up or down to play with creativity
   property temperature : Float32 = 0.9 # --temperature
-
-  # Include this to make parsing system responses easier. It acts like an opening HTML tag, but there's no closing component
-  property in_suffix : String = "<Assistant: " # --in-suffix
 
   # This is just a good idea, it helps keep the original prompt in the context window. This should keep the model more focused on the original topic.
   property keep : String = "" # --keep or --keep N where `N` is the number of tokens to refresh into the context window
@@ -49,12 +46,6 @@ class LlamaCpp
       grammar_file_command = ""
     else
       grammar_file_command = "--grammar-file \"#{@grammar_root_path.join(grammar_file)}\""
-    end
-
-    if @in_suffix.blank?
-      in_suffix_command = ""
-    else
-      in_suffix_command = "--in-suffix \"#{@in_suffix}\""
     end
 
     prompt_text = ""
@@ -81,16 +72,11 @@ class LlamaCpp
       puts "Query count... #{query_count}"
 
       spawn do
-        puts "spawning a fiber for the process..."
         begin
-          puts "running the process"
           current_process = Process.new("llamacpp -m \"#{model_root_path.join(model_name)}\" #{grammar_file_command} --n-predict #{n_predict} --threads #{@threads} --ctx-size #{max_tokens} --temp #{temperature} --top-k #{top_k_sampling} --repeat-penalty #{repeat_penalty} --log-disable --prompt \"#{prompt_text}\"", shell: true, input: Process::Redirect::Close, output: Process::Redirect::Pipe, error: Process::Redirect::Close)
-          puts "sending the pid"
           process_id_channel.send(current_process.pid)
           process_output_channel.send(current_process.output)
           current_process.wait
-
-          puts "The llm process was finished! This should _not_ loop now"
           
           successfully_completed_chat_completion_channel.send(true)
           query_count_incrementer_channel.send(5)
@@ -102,26 +88,25 @@ class LlamaCpp
         end
       end
       
-      puts "A fiber has spawned... now waiting for a response before timing out"
+      Log.info { "The AI is now processing... please wait" }
       
       # Multi-threaded keyword here, this acts like a blocking mechanism to allow for reflecting on the previously spawned fiber
       select
       # When the process outputs something, capture it and send it to the content hash
       when content_io = process_output_channel.receive
-        puts "The process has output something and been recieved back into the main fiber"
         content["content"] = content_io.gets_to_end.split("\n\r\rAssistant: ").last
-      when timeout(2.minute)
-        puts "timed out, checking the process status..."
+      when timeout(3.minutes)
+        Log.info { "The AI took too long, restarting the query now" }
         
         if Process.exists?(process_id_channel.receive)
-          puts "The process is still running, let's wait for the output channel to receive something"
-          sleep 30.seconds
-          puts "checking the process output again..."
+          Log.info { "The process is still running, let's wait for the output channel to receive something" }
+          sleep 1.minute
+          Log.info { "checking the process output again..." }
           output = process_output_channel.receive
           content["content"] = output.gets_to_end
           
-          puts "The process has outputted something, let's check it out"
-          puts content["content"]
+          Log.info { "We have a completed response from the AI." }
+          Log.info { content["content"] }
         end
         
         # If the pid for the process is still running, check the last output for this process and compare it to the last known output. If it's the same, kill the process and move on

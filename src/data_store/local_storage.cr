@@ -7,10 +7,9 @@ class LocalStorage
   property goals : Array(Goal) = [] of Goal
   #property schedule : Array(Schedule) = [] of Schedule
 
-
   # Update the local store file with whatever it's current state is. 
   def update_local_storage_file
-    File.write(Path["~/.agentc/local_storage.json"].expand(home: true), self.to_json)
+    File.write(Path["~/.agentc/local_storage.json"].expand(home: true), self.to_pretty_json)
   end
 
   # Read your goals from a local storage file.

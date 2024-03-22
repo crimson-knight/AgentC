@@ -101,7 +101,7 @@ module AgentC
   else
     puts "The following goals were found in your local storage: "
     local_storage.goals.each do |goal|
-      puts "Original Goal: #{goal.refined_goal}\nGoal status: #{goal.status}\nRefined Goal: #{goal.refined_goal}\nGoal start date: #{goal.start_date}"
+      puts "Original Goal: #{goal.initial_goal}\nGoal status: #{goal.status}\nRefined Goal: #{goal.refined_goal}\nGoal start date: #{goal.start_date}"
     end
 
     puts "Would you like to add more goals? (yes/no)"

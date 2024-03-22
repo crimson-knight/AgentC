@@ -6,6 +6,7 @@ require "../concepts/capabilities/communication/**"
 require "../concepts/capabilities/file_management/**"
 require "../concepts/capabilities/search/**"
 require "../concepts/capabilities/zapier/**"
+require "../concepts/agent_personalities/**"
 
 
 # This is where the real "agent" stuff begins. This is where you'll want to customize the flow of how your agent works inside of it's own infite loop.
@@ -18,6 +19,7 @@ class PrimaryProcess
   property agent_configuration : AgentConfig
   property local_storage : LocalStorage
   property capabilities : Array(PrimaryCapability) = Array(PrimaryCapability).new
+  property agent_personalities : Array(AgentPersonalityBase) = Array(AgentPersonalityBase).new
 
   def initialize(@agent_configuration, @local_storage)
     # @openai_client = OpenAI::Client.new(access_token: @agent_configuration.openai_api_key)
@@ -32,6 +34,14 @@ class PrimaryProcess
     @capabilities << UpdateFileCapability.new
     @capabilities << SendEmailCapability.new
     @capabilities << SendTextMessageCapability.new
+
+    # Registering all of the agent personalities available to choose from
+    @agent_personalities << ArchitectAxiom.new
+    @agent_personalities << IntegratorIan.new
+    @agent_personalities << ProductOwner.new
+    @agent_personalities << QATronix.new
+    @agent_personalities << RubyDeveloperDelta.new
+    @agent_personalities << SecuritySentinalSigma.new
   end
 
   # This is the primary entry-point method for how the Agents behavior starts. Particularly with the start-up flow.
@@ -41,6 +51,89 @@ class PrimaryProcess
     verify_all_goals_have_a_plan
 
     # The on-going process of executing the agents plan
+    # 
+    # 1. Loop through all of the goals and begin executing the plan
+    #   a. If the goal has not been assigned to an Agent personality yet, prompt the AI to assign it to an Agent personality
+    #   b. If the goal has been assigned to an Agent personality, find the current step and begin working
+    # 2. If there are no steps that can be worked on right away, wait and periodically check for any scheduled tasks to work on
+    
+    work_on_next_available_step
+  end
+
+  # This will use the AI to review the goal and refine it into a SMART goal.
+  #
+  # TODO: This should be refactored so that the AI can get feedback from the user so it's actually a realistic goal
+  def verify_all_goals_are_refined_or_refine_them
+    @local_storage.goals.each do |goal|
+      if !goal.is_smart?
+        puts "Goal ``#{goal.initial_goal}`` is not refined."
+
+        while(!goal.is_smart?)
+          goal_refinement_prompt = <<-STRING
+          You are an expert AI at goal setting. You must refine a goal to be SMART (Specific, Measurable, Achievable, Relevant, Time-bound).
+
+          The current date is: #{Time.utc}
+          Here is the goal you need to work with:
+
+          #{goal.initial_goal}
+
+          Please consider this goal and how you can make it into a SMART goal, knowing that you are an AI who will have an agent making this goal happen.
+          STRING
+          
+          max_retries = 5
+          retries = 0
+
+          ## TODO: finishing migrating this prompt to follow the same pattern as the goal steps prompting
+          messages =  [{role: "[INST]<<SYS>>", content: "<</SYS>>"}, {role: "user", content: goal_refinement_prompt}]
+          
+          Log.info { "Beginning to refine the goal: #{goal.initial_goal}" }
+
+          while retries < max_retries
+            puts "Max retries: #{max_retries}"
+            puts "Retry count: #{retries}"
+            begin
+              ai_response = @openai_client.chat(messages: messages, grammar_file: "goal_refining.gbnf", repeat_penalty: 1.1, top_k_sampling: 284)
+              puts "llama2 said: \n"
+              puts ai_response.gets_to_end
+              
+              # Update the existing goal with the refined goal details that make the goal SMART
+              tmp_goal = Goal.from_json(ai_response.rewind)
+              goal.specific = tmp_goal.specific
+              goal.measurable = tmp_goal.measurable
+              goal.achievable = tmp_goal.achievable
+              goal.relevant = tmp_goal.relevant
+              goal.time_bound = tmp_goal.time_bound
+              goal.refined_goal = tmp_goal.refined_goal
+
+              Log.info { "The goal has been successfully refined." }
+              retries = max_retries # end the loop
+              puts "Retries: #{retries}"
+            rescue e
+              Log.error { "An error occurred while trying to parse the refined goal from the AI." }
+
+              retries += 1
+              if retries < max_retries
+                Log.info { "Retrying... Attempt #{retries + 1} of #{max_retries}" }
+              else
+                Log.error { "Failed to get a valid JSON response after #{max_retries} attempts." }
+              end
+            end
+
+            puts "Retries at the end of the loop: #{retries}"
+          end
+        end
+
+        Log.info { "All goals are refined into SMART goals." }
+        Log.info { "Updating local storage..." }
+
+        @local_storage.update_local_storage_file
+      end
+    end
+    puts "All of our goals appear to be refined."
+  end
+
+  # Loop through every goal, if a plan does not already exist create a new one
+  def verify_all_goals_have_a_plan
     @local_storage.goals.each do |goal|
       if goal.status == "not_started" && goal.asynchronous_steps.empty? && goal.synchronous_steps.empty?
         puts "Creating a plan for goal: #{goal.refined_goal}"
@@ -86,77 +179,54 @@ class PrimaryProcess
         @local_storage.update_local_storage_file
       end
     end
-
   end
 
-  def verify_all_goals_are_refined_or_refine_them
+  # This begins working through all of the goals to determine what to work on next. It'll start working on the first thing it comes across that can be worked on.
+  # TODO: turn this step into more of a prioritization step so we can balance working on things that are taking time and being punctual with performing scheduled tasks that long running work may collide with.
+  def work_on_next_available_step
     @local_storage.goals.each do |goal|
-      if !goal.is_smart?
-        puts "Goal ``#{goal.initial_goal}`` is not refined."
-
-        while(!goal.is_smart?)
-          goal_refinement_prompt = <<-STRING
-          You are an expert AI at goal setting. You must refine a goal to be SMART (Specific, Measurable, Achievable, Relevant, Time-bound).
-
-          The current date is: #{Time.utc}
-          Here is the goal you need to work with:
-
-          #{goal.initial_goal}
-
-          Please consider this goal and how you can make it into a SMART goal, knowing that you are an AI who will have an agent making this goal happen.
-          STRING
-          
-          max_retries = 5
-          retries = 0
-
-          ## TODO: finishing migrating this prompt to follow the same pattern as the goal steps prompting
-          messages =  [{role: "[INST]<<SYS>>", content: "<</SYS>>"}, {role: "user", content: goal_refinement_prompt}]
-          
-          Log.info { "Beginning to refine the goal: #{goal.initial_goal}" }
-
-          while retries < max_retries
-            begin
-              ai_response = @openai_client.chat(messages: messages, grammar_file: "goal_refining.gbnf", repeat_penalty: 1.3, top_k_sampling: 300)
-              puts "llama2 said: \n"
-              pp ai_response.gets_to_end
-              goal = Goal.from_json(ai_response.rewind)
-              puts "The goal has been updated"
-              retries = max_retries # end the loop
-            rescue
-              retries += 1
-              if retries < max_retries
-                Log.info { "Retrying... Attempt #{retries + 1} of #{max_retries}" }
-              else
-                Log.error { "Failed to get a valid JSON response after #{max_retries} attempts." }
-              end
-            end
-          end
+      # Determine if any steps have been started, if not, start the first step
+      if goal.status == "not_started"
+        if goal.asynchronous_steps.any?
+          next_step = goal.asynchronous_steps.find { |step| step.status == "not_started" } || Step.from_json(%({}))
+          next_step.status = "in_progress"
+          goal.start_date = Time.utc.to_s
+          goal.last_evaluated = Time.utc.to_s
+          goal.assigned_agent = determine_which_agent_to_assign_to_the_step(goal.refined_goal, next_step.name)
         end
-
-        Log.info { "All goals are refined into SMART goals." }
-        Log.info { "Updating local storage..." }
-
-        @local_storage.goals = @local_storage.goals.map do |original_goal|
-          if original_goal.initial_goal == goal.initial_goal
-            original_goal = goal
-          end
-
-          original_goal
-        end
-
-        @local_storage.update_local_storage_file
       end
     end
-    puts "All of our goals appear to be refined."
   end
 
-  def verify_all_goals_have_a_plan
+  private def determine_which_agent_to_assign_to_the_step(goal_text, step_name) : String
+    # Create a prompt that includes all of the known personalities and let's the AI choose which personality to assign to the current step
+    # Create a prompt that includes all of the known personalities and let's the AI choose which personality to assign to the current step
+    prompt = <<-STRING
+      From the following list of role names and personalities, select the most correct agent to assign to the next step.
+      Here is the next step in the process that this agent will be responsible for: #{step_name}
+      #{@agent_personalities.map { |personality| "- #{personality.agent_name}: #{personality.routing_guidance}" }.join("\n")}
+    STRING
+    
+    messages = [{role: "[INST]<<SYS>>", content: "You are an assistant AI who is responsible for assigning the correct agent to the next step in the goal.<</SYS>>"}, {role: "user", content: prompt}]
+
+    a_valid_plan_provided_was_not_provided = false
+    while !a_valid_plan_provided_was_not_provided
+      ai_response = @openai_client.chat(messages: messages, grammar_file: "agent_assignment.gbnf", repeat_penalty: 1.2, top_k_sampling: 264)
+      
+      begin
+        parsed_response = JSON.parse(ai_response.gets_to_end)
+        a_valid_plan_provided_was_not_provided = true
+      rescue e
+      end
+    end
+
+    raise "The AI did not provide a valid response for the assigned agent." if parsed_response.nil?
+    return parsed_response["assigned_agent"].as_s
   end
 end
-
   
 
-# Helper class to parse the JSON response from the AI for the goal planning step
+# Helper struct to parse the JSON response from the AI for the goal planning step
 struct GoalResponse
   include JSON::Serializable
 
