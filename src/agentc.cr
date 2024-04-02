@@ -4,6 +4,7 @@ require "./data_store/local_storage"
 require "./concepts/goals/goal"
 require "./processes/primary_process"
 require "colorize"
+require "log"
 
 # This ChatGPT-Agent was inspired by Auto-GPT (written in Python).
 #
@@ -110,7 +111,7 @@ module AgentC
   end
 
   
-  puts "Alright! Let's get started!"
+  Log.info { "Starting the primary process..." }
   # Start the goals process
   goals_process = PrimaryProcess.new(agent_configuration: agent_configuration, local_storage: local_storage)
   goals_process.run

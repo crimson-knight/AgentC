@@ -36,12 +36,12 @@ class PrimaryProcess
     @capabilities << SendTextMessageCapability.new
 
     # Registering all of the agent personalities available to choose from
-    @agent_personalities << ArchitectAxiom.new
-    @agent_personalities << IntegratorIan.new
-    @agent_personalities << ProductOwner.new
-    @agent_personalities << QATronix.new
-    @agent_personalities << RubyDeveloperDelta.new
-    @agent_personalities << SecuritySentinalSigma.new
+    @agent_personalities << ArchitectAxiom.new(capabilities: @capabilities, ai_client: @openai_client)
+    @agent_personalities << IntegratorIan.new(capabilities: @capabilities, ai_client: @openai_client)
+    @agent_personalities << ProductOwner.new(capabilities: @capabilities, ai_client: @openai_client)
+    @agent_personalities << QATronix.new(capabilities: @capabilities, ai_client: @openai_client)
+    @agent_personalities << RubyDeveloperDelta.new(capabilities: @capabilities, ai_client: @openai_client)
+    @agent_personalities << SecuritySentinalSigma.new(capabilities: @capabilities, ai_client: @openai_client)
   end
 
   # This is the primary entry-point method for how the Agents behavior starts. Particularly with the start-up flow.
@@ -55,8 +55,9 @@ class PrimaryProcess
     # 1. Loop through all of the goals and begin executing the plan
     #   a. If the goal has not been assigned to an Agent personality yet, prompt the AI to assign it to an Agent personality
     #   b. If the goal has been assigned to an Agent personality, find the current step and begin working
-    # 2. If there are no steps that can be worked on right away, wait and periodically check for any scheduled tasks to work on
+    # 2. TODO If there are no steps that can be worked on right away, wait and periodically check for any scheduled tasks to work on
     
+    # Performs Step 1. and loops through all of the goals, but it just begins working on the first step that needs to be executed
     work_on_next_available_step
   end
 
@@ -208,6 +209,8 @@ class PrimaryProcess
           Log.info { "Determining which agent is assigned to this agent: #{goal.assigned_agent}"}
 
           goal.assigned_agent = determine_which_agent_to_assign_to_the_step(goal.refined_goal, next_step.name)
+          # We now have the agent assigned to the next task to start working on. Now what?
+
         end
       end
     end
@@ -219,13 +222,14 @@ class PrimaryProcess
       From the following list of role names and personalities, select the most correct agent to assign to the next step.
       Here is the next step in the process that this agent will be responsible for: #{step_name}
       #{@agent_personalities.map { |personality| "- #{personality.agent_name}: #{personality.routing_guidance}" }.join("\n")}
-    STRING
+    STRING 
     
+    # [INST] Instruction tag closure happens in the LlamaCpp class
     messages = [{role: "[INST]<<SYS>>", content: "You are an assistant AI who is responsible for assigning the correct agent to the next step in the goal.<</SYS>>"}, {role: "user", content: prompt}]
 
     a_valid_plan_provided_was_not_provided = false
     while !a_valid_plan_provided_was_not_provided
-      ai_response = @openai_client.chat(messages: messages, grammar_file: "agent_assignment.gbnf", repeat_penalty: 1.2, top_k_sampling: 264)
+      ai_response = @openai_client.chat(messages: messages, grammar_file: "agent_assignment.gbnf", repeat_penalty: 1.2, top_k_sampling: 64)
       puts ai_response.gets_to_end
       begin
         parsed_response = JSON.parse(ai_response.rewind.gets_to_end)
@@ -241,7 +245,8 @@ class PrimaryProcess
 end
   
 
-# Helper struct to parse the JSON response from the AI for the goal planning step
+# Helper struct to parse the JSON response from the AI for the goal planning step.
+# This only serves to parse the JSON response from the AI for the goal planning step.
 struct GoalResponse
   include JSON::Serializable
 

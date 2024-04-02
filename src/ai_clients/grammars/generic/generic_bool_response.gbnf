@@ -1,0 +1,2 @@
+root ::= "{ \"bool\": "   boolean   "}"
+boolean ::= true | false

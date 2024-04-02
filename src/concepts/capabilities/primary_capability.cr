@@ -11,10 +11,17 @@ require "http/client"
 #   property capability_name
 #   property capability_description
 # ```
+# 
+# This class includes the JSON::Serializable module, which means that it can be serialized and deserialized to and from JSON, making it easier
+# to get the AI models to understand the capabilities and how to check that everything worked as expected.
 #
 abstract class PrimaryCapability
+  include JSON::Serializable
+
   property capability_name : String = "Default"
   property capability_description : String = "Default"
+  property expected_outcome : String = "Default"
+  
 
   # You don't have to redefine this method, unless you want to.
   def generate_capability_description_for_goal_planning
